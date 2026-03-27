@@ -81,7 +81,7 @@
     <div class="container">
         <div class="header">
             <h1>ETL Mapping Document Generator</h1>
-            <p>Upload a SQL Server stored procedure and generate a comprehensive<br>mapping document powered by Tachyon LLM</p>
+            <p>Upload a SQL stored procedure and an optional reference mapping document.<br>The LLM will generate a new mapping document matching the reference format.</p>
             <div class="tabs-preview">
                 <span class="tab-badge">Header</span>
                 <span class="tab-badge">Data Set</span>
@@ -96,7 +96,7 @@
 
         <form id="uploadForm" class="form-body" enctype="multipart/form-data">
             <div class="form-group">
-                <label>SQL Stored Procedure File</label>
+                <label>SQL Stored Procedure File <span style="color:#dc3545">*</span></label>
                 <div class="upload-area" id="uploadArea" onclick="document.getElementById('sqlFile').click()">
                     <div class="icon" id="uploadIcon">&#128196;</div>
                     <div class="text" id="uploadText">Click to upload or drag &amp; drop</div>
@@ -104,6 +104,18 @@
                     <div class="filename" id="fileName"></div>
                 </div>
                 <input type="file" id="sqlFile" name="sql_file" accept=".sql" class="file-input">
+            </div>
+
+            <div class="form-group">
+                <label>Reference Mapping Document <span style="color:#888; font-weight:normal">(optional)</span></label>
+                <div class="upload-area" id="refUploadArea" onclick="document.getElementById('refFile').click()">
+                    <div class="icon" id="refUploadIcon">&#128202;</div>
+                    <div class="text" id="refUploadText">Click to upload or drag &amp; drop</div>
+                    <div class="subtext">Accepts .xlsx files — the LLM will match this format</div>
+                    <div class="filename" id="refFileName"></div>
+                </div>
+                <input type="file" id="refFile" name="ref_file" accept=".xlsx,.xls" class="file-input">
+                <div class="hint">Upload an existing mapping document as a reference. The generated document will follow the same structure, column layout, and style.</div>
             </div>
 
             <button type="submit" class="btn-generate" id="btnGenerate">
@@ -124,38 +136,47 @@
         const uploadText = document.getElementById('uploadText');
         const uploadIcon = document.getElementById('uploadIcon');
         const fileName = document.getElementById('fileName');
+        const refUploadArea = document.getElementById('refUploadArea');
+        const refFile = document.getElementById('refFile');
+        const refUploadText = document.getElementById('refUploadText');
+        const refUploadIcon = document.getElementById('refUploadIcon');
+        const refFileName = document.getElementById('refFileName');
         const form = document.getElementById('uploadForm');
         const btn = document.getElementById('btnGenerate');
         const statusEl = document.getElementById('status');
 
-        uploadArea.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-        uploadArea.addEventListener('dragleave', function() {
-            uploadArea.classList.remove('dragover');
-        });
-        uploadArea.addEventListener('drop', function(e) {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            if (e.dataTransfer.files.length > 0) {
-                sqlFile.files = e.dataTransfer.files;
-                updateFileDisplay(e.dataTransfer.files[0]);
-            }
-        });
-
-        sqlFile.addEventListener('change', function() {
-            if (sqlFile.files.length > 0) {
-                updateFileDisplay(sqlFile.files[0]);
-            }
-        });
-
-        function updateFileDisplay(file) {
-            uploadArea.classList.add('has-file');
-            uploadIcon.innerHTML = '&#9989;';
-            uploadText.textContent = 'File selected:';
-            fileName.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+        function setupUploadArea(area, fileInput, textEl, iconEl, nameEl) {
+            area.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                area.classList.add('dragover');
+            });
+            area.addEventListener('dragleave', function() {
+                area.classList.remove('dragover');
+            });
+            area.addEventListener('drop', function(e) {
+                e.preventDefault();
+                area.classList.remove('dragover');
+                if (e.dataTransfer.files.length > 0) {
+                    fileInput.files = e.dataTransfer.files;
+                    showFileSelected(area, iconEl, textEl, nameEl, e.dataTransfer.files[0]);
+                }
+            });
+            fileInput.addEventListener('change', function() {
+                if (fileInput.files.length > 0) {
+                    showFileSelected(area, iconEl, textEl, nameEl, fileInput.files[0]);
+                }
+            });
         }
+
+        function showFileSelected(area, iconEl, textEl, nameEl, file) {
+            area.classList.add('has-file');
+            iconEl.innerHTML = '&#9989;';
+            textEl.textContent = 'File selected:';
+            nameEl.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+        }
+
+        setupUploadArea(uploadArea, sqlFile, uploadText, uploadIcon, fileName);
+        setupUploadArea(refUploadArea, refFile, refUploadText, refUploadIcon, refFileName);
 
         form.addEventListener('submit', async function(e) {
             e.preventDefault();

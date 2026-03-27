@@ -121,7 +121,33 @@ def read_file(filepath):
         return f.read()
 
 
-def call_tachyon(prompt, sql_content):
+def read_reference_excel(filepath):
+    """Read a reference mapping document (Excel) and return a text summary
+    that can be included in the LLM prompt so it understands the desired
+    structure, column layout, and content style."""
+    wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+    parts = []
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            parts.append(f"### Sheet: {sheet_name}\n(empty)")
+            continue
+        # First row is header
+        headers = [str(c) if c is not None else "" for c in rows[0]]
+        lines = [f"### Sheet: {sheet_name}", "| " + " | ".join(headers) + " |"]
+        lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
+        for row in rows[1:]:
+            cells = [str(c).replace("\n", " ").replace("|", "/") if c is not None else "" for c in row]
+            # Truncate very long cell values to keep prompt manageable
+            cells = [c[:200] if len(c) > 200 else c for c in cells]
+            lines.append("| " + " | ".join(cells) + " |")
+        parts.append("\n".join(lines))
+    wb.close()
+    return "\n\n".join(parts)
+
+
+def call_tachyon(prompt, sql_content, reference_content=None):
     """Call the Tachyon LLM API and return parsed JSON response."""
     session = os.environ.get("TACHYON_SESSION")
     user_id = os.environ.get("TACHYON_USER_ID")
@@ -139,6 +165,14 @@ def call_tachyon(prompt, sql_content):
         sys.exit(1)
 
     full_prompt = prompt.replace("{sql_content}", sql_content)
+
+    # Inject reference document content into prompt if provided
+    if reference_content:
+        full_prompt = full_prompt.replace("{reference_content}", reference_content)
+    else:
+        # Remove the reference section placeholder if no reference provided
+        full_prompt = full_prompt.replace("{reference_content}", "No reference document provided. Use the default structure described above.")
+
     system_message = "You are a data engineering expert. You respond only with valid JSON."
 
     print(f"Calling Tachyon LLM API: {llm_url}")
@@ -291,6 +325,7 @@ def main():
     parser.add_argument("sql_file", help="Path to the SQL stored procedure file to analyze.")
     parser.add_argument("--prompt", default=DEFAULT_PROMPT_FILE, help="Path to the prompt template file.")
     parser.add_argument("--output", default=None, help="Output Excel file path.")
+    parser.add_argument("--reference", default=None, help="Path to a reference mapping document (.xlsx) to match.")
     args = parser.parse_args()
 
     if not os.path.isfile(args.sql_file):
@@ -298,6 +333,9 @@ def main():
         sys.exit(1)
     if not os.path.isfile(args.prompt):
         print(f"ERROR: Prompt template file not found: {args.prompt}")
+        sys.exit(1)
+    if args.reference and not os.path.isfile(args.reference):
+        print(f"ERROR: Reference document not found: {args.reference}")
         sys.exit(1)
 
     if args.output:
@@ -311,7 +349,12 @@ def main():
     print(f"Reading prompt template: {args.prompt}")
     prompt_template = read_file(args.prompt)
 
-    llm_response = call_tachyon(prompt_template, sql_content)
+    reference_content = None
+    if args.reference:
+        print(f"Reading reference document: {args.reference}")
+        reference_content = read_reference_excel(args.reference)
+
+    llm_response = call_tachyon(prompt_template, sql_content, reference_content=reference_content)
 
     json_output_path = output_path.replace(".xlsx", "_llm_response.json")
     with open(json_output_path, "w", encoding="utf-8") as f:

@@ -15,7 +15,7 @@ import tempfile
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, send_file, jsonify
 
-from generate_mapping_doc import call_tachyon, build_excel, read_file, DEFAULT_PROMPT_FILE
+from generate_mapping_doc import call_tachyon, build_excel, read_file, read_reference_excel, DEFAULT_PROMPT_FILE
 
 # Load .env file from the project root
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
@@ -56,6 +56,24 @@ def generate():
     # Read SQL content
     sql_content = sql_file.read().decode("utf-8")
 
+    # Read optional reference mapping document
+    reference_content = None
+    if "ref_file" in request.files:
+        ref_file = request.files["ref_file"]
+        if ref_file.filename and ref_file.filename != "":
+            if not ref_file.filename.lower().endswith((".xlsx", ".xls")):
+                return jsonify({"error": "Reference file must be an Excel file (.xlsx or .xls)."}), 400
+            # Save to a temp file so openpyxl can read it
+            with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as ref_tmp:
+                ref_tmp_path = ref_tmp.name
+                ref_file.save(ref_tmp_path)
+            try:
+                reference_content = read_reference_excel(ref_tmp_path)
+            except Exception as e:
+                return jsonify({"error": f"Failed to read reference document: {e}"}), 400
+            finally:
+                os.unlink(ref_tmp_path)
+
     # Read prompt template
     prompt_path = request.form.get("prompt_path", "").strip()
     if not prompt_path:
@@ -68,7 +86,7 @@ def generate():
 
     try:
         # Call Tachyon LLM
-        llm_response = call_tachyon(prompt_template, sql_content)
+        llm_response = call_tachyon(prompt_template, sql_content, reference_content=reference_content)
 
         # Build Excel in a temp file
         proc_name = os.path.splitext(sql_file.filename)[0]
