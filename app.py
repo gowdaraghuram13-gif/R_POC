@@ -3,21 +3,22 @@ Flask web application for generating ETL mapping documents.
 Upload a SQL stored procedure file and get an Excel mapping document back.
 
 Usage:
-    export OPENAI_API_KEY="sk-..."
-    python app.py
-
-Then open http://localhost:5000 in your browser.
+    1. Create a .env file with: OPENAI_API_KEY=sk-...
+    2. python app.py
+    3. Open http://localhost:5000 in your browser.
 """
 
-import io
 import json
 import os
 import tempfile
-import uuid
 
+from dotenv import load_dotenv
 from flask import Flask, render_template, request, send_file, jsonify
 
 from generate_mapping_doc import call_openai, build_excel, read_file, DEFAULT_PROMPT_FILE
+
+# Load .env file from the project root
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB max upload
@@ -30,12 +31,9 @@ def index():
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    # Check API key
-    api_key = request.form.get("api_key", "").strip()
-    if api_key:
-        os.environ["OPENAI_API_KEY"] = api_key
-    elif not os.environ.get("OPENAI_API_KEY"):
-        return jsonify({"error": "OpenAI API key is required. Either provide it in the form or set the OPENAI_API_KEY environment variable."}), 400
+    # Check API key (loaded from .env file)
+    if not os.environ.get("OPENAI_API_KEY"):
+        return jsonify({"error": "OpenAI API key is not configured. Please add OPENAI_API_KEY=sk-... to your .env file and restart the server."}), 400
 
     # Check file upload
     if "sql_file" not in request.files:
@@ -91,6 +89,9 @@ def generate():
 
 
 if __name__ == "__main__":
+    if not os.environ.get("OPENAI_API_KEY"):
+        print("WARNING: OPENAI_API_KEY not found. Create a .env file with: OPENAI_API_KEY=sk-...")
+    else:
+        print("OpenAI API key loaded successfully.")
     print("Starting Mapping Document Generator on http://localhost:5000")
-    print("Make sure OPENAI_API_KEY is set or provide it in the web form.")
     app.run(host="0.0.0.0", port=5000, debug=True)
