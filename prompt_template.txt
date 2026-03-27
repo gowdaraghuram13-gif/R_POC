@@ -1,0 +1,39 @@
+You are a data engineering expert. Analyze the following SQL Server stored procedure and generate a comprehensive mapping document in JSON format.
+
+The stored procedure loads a dimension table from a staging table. Your task is to extract all relevant metadata and produce a structured JSON response with the following sections:
+
+1. **header**: Project metadata
+   - document_title, project_name, module, stored_procedure, source_system, target_system, source_table, target_table, load_strategy, author, created_date, version, status, description, dependencies, execution_frequency, estimated_row_volume, error_handling
+
+2. **data_sets**: Array of all data sets involved (source, target, log, temp tables)
+   - Each with: name, database, schema, table_name, type, row_count_estimate, description
+
+3. **source_data**: Array of source table columns
+   - Each with: column_number, column_name, data_type, nullable, primary_key, description, sample_value
+
+4. **target_data**: Array of target table columns
+   - Each with: column_number, column_name, data_type, nullable, primary_key, is_unique, default_value, column_type (one of: "Surrogate Key", "Business Key", "1:1 Mapping", "Transformed", "System"), description, sample_value
+
+5. **data_dictionary**: Array of business-level definitions for all target columns
+   - Each with: column_number, column_name, business_name, data_type, length_precision, nullable, domain_valid_values, business_definition, source_system, notes
+
+6. **mapping**: Array of column-level source-to-target mapping rules
+   - Each with: mapping_number, source_column, source_data_type, target_column, target_data_type, mapping_type (one of: "1:1 Direct", "Transformation", "System Generated"), mapping_rule, join_key, null_handling, notes
+
+7. **health_checks**: Array of validation queries
+   - Each with: check_number, check_category, check_name, check_description, sql_query, expected_result, severity (Critical/High/Medium/Low), frequency
+
+8. **transformations**: Array of detailed transformation breakdowns
+   - Each with: transformation_number, transformation_name, target_column, source_columns, transformation_type, business_rule, sql_logic, null_handling, edge_cases, example_input, example_output
+
+IMPORTANT:
+- Respond ONLY with valid JSON. No markdown, no code fences, no explanations outside the JSON.
+- The JSON must have exactly these top-level keys: header, data_sets, source_data, target_data, data_dictionary, mapping, health_checks, transformations
+- Be thorough and accurate. Extract all columns, all transformations, and all mapping rules from the SQL code.
+- For health checks, include at least 10 meaningful validations covering row counts, duplicates, NULL checks, transformation correctness, ETL audit, and data quality.
+
+Here is the stored procedure to analyze:
+
+---BEGIN SQL---
+{sql_content}
+---END SQL---
