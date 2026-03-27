@@ -81,7 +81,7 @@
     <div class="container">
         <div class="header">
             <h1>ETL Mapping Document Generator</h1>
-            <p>Upload a SQL Server stored procedure and generate a comprehensive<br>mapping document powered by OpenAI GPT-4o</p>
+            <p>Upload a SQL Server stored procedure and generate a comprehensive<br>mapping document powered by Tachyon LLM</p>
             <div class="tabs-preview">
                 <span class="tab-badge">Header</span>
                 <span class="tab-badge">Data Set</span>
@@ -114,7 +114,7 @@
         </form>
 
         <div class="footer">
-            Powered by OpenAI GPT-4o &bull; Generates Excel with 8 professional tabs
+            Powered by Tachyon LLM &bull; Generates Excel with 8 professional tabs
         </div>
     </div>
 
@@ -167,7 +167,7 @@
 
             btn.disabled = true;
             btn.textContent = 'Generating...';
-            showStatus('loading', '<span class="spinner"></span> Calling OpenAI API and generating mapping document... This may take 30-60 seconds.');
+            showStatus('loading', '<span class="spinner"></span> Calling Tachyon LLM API and generating mapping document... This may take 30-60 seconds.');
 
             var formData = new FormData(form);
 

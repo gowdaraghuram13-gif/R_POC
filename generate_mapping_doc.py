@@ -1,13 +1,13 @@
 """
 Generate a mapping document (Excel) for a SQL Server stored procedure
-by calling the OpenAI GPT-4o API.
+by calling the Tachyon LLM API.
 
 Usage:
-    export OPENAI_API_KEY="sk-..."
-    python generate_mapping_doc.py <sql_file> [--prompt <prompt_file>] [--output <output_file>]
+    1. Create a .env file with Tachyon credentials (see .env.example)
+    2. python generate_mapping_doc.py <sql_file> [--prompt <prompt_file>] [--output <output_file>]
 
 Requirements:
-    pip install openai openpyxl
+    pip install requests openpyxl python-dotenv
 """
 
 import argparse
@@ -15,7 +15,7 @@ import json
 import os
 import sys
 
-import openai
+import requests
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -23,7 +23,7 @@ from openpyxl.utils import get_column_letter
 
 DEFAULT_PROMPT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompt_template.txt")
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs")
-OPENAI_MODEL = "gpt-4o"
+DEFAULT_TACHYON_URL = "https://tachyon-studio.institute.net/playground_document_llm"
 
 HEADER_FONT = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
 HEADER_FILL = PatternFill(start_color="2F5496", end_color="2F5496", fill_type="solid")
@@ -121,35 +121,76 @@ def read_file(filepath):
         return f.read()
 
 
-def call_openai(prompt, sql_content):
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        print("ERROR: OPENAI_API_KEY environment variable is not set.")
-        print("Set it with: export OPENAI_API_KEY='sk-...'")
+def call_tachyon(prompt, sql_content):
+    """Call the Tachyon LLM API and return parsed JSON response."""
+    session = os.environ.get("TACHYON_SESSION")
+    user_id = os.environ.get("TACHYON_USER_ID")
+    preset_id = os.environ.get("TACHYON_PRESET_ID")
+    llm_url = os.environ.get("TACHYON_LLM_URL", DEFAULT_TACHYON_URL)
+
+    if not session:
+        print("ERROR: TACHYON_SESSION is not set in .env file.")
         sys.exit(1)
+    if not user_id:
+        print("ERROR: TACHYON_USER_ID is not set in .env file.")
+        sys.exit(1)
+    if not preset_id:
+        print("ERROR: TACHYON_PRESET_ID is not set in .env file.")
+        sys.exit(1)
+
     full_prompt = prompt.replace("{sql_content}", sql_content)
-    client = openai.OpenAI(api_key=api_key)
-    print(f"Calling OpenAI API ({OPENAI_MODEL})...")
+    system_message = "You are a data engineering expert. You respond only with valid JSON."
+
+    print(f"Calling Tachyon LLM API: {llm_url}")
     print(f"Prompt length: {len(full_prompt)} characters")
-    response = client.chat.completions.create(
-        model=OPENAI_MODEL,
-        messages=[
-            {"role": "system", "content": "You are a data engineering expert. You respond only with valid JSON."},
-            {"role": "user", "content": full_prompt},
-        ],
-        temperature=0.2,
-        max_tokens=16000,
-        response_format={"type": "json_object"},
-    )
-    raw_response = response.choices[0].message.content
+
+    payload = {
+        "user_id": user_id,
+        "preset_id": preset_id,
+        "prompt": full_prompt,
+        "system_message": system_message,
+    }
+
+    cookies = {"higgs_session": session}
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    resp = requests.post(llm_url, json=payload, cookies=cookies, headers=headers, timeout=120)
+    resp.raise_for_status()
+
+    resp_data = resp.json()
+
+    # Try to extract the LLM text from common response shapes
+    raw_response = None
+    if isinstance(resp_data, str):
+        raw_response = resp_data
+    elif isinstance(resp_data, dict):
+        # Try common keys where the LLM text might be
+        for key in ["response", "result", "text", "content", "output", "answer", "message", "data"]:
+            if key in resp_data:
+                val = resp_data[key]
+                if isinstance(val, str):
+                    raw_response = val
+                    break
+                elif isinstance(val, dict):
+                    # The value itself might be the JSON we need
+                    raw_response = json.dumps(val)
+                    break
+        if raw_response is None:
+            # Maybe the entire response IS the mapping data
+            raw_response = json.dumps(resp_data)
+
     print(f"Response received: {len(raw_response)} characters")
+
     try:
         data = json.loads(raw_response)
     except json.JSONDecodeError as e:
         print(f"ERROR: Failed to parse JSON response from LLM: {e}")
         print("Raw response (first 500 chars):")
         print(raw_response[:500])
-        sys.exit(1)
+        raise ValueError(f"Failed to parse JSON from Tachyon LLM response: {e}")
     return data
 
 
@@ -245,7 +286,7 @@ def build_excel(data, output_path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate an ETL mapping document (Excel) from a SQL stored procedure using OpenAI GPT-4o.",
+        description="Generate an ETL mapping document (Excel) from a SQL stored procedure using Tachyon LLM.",
     )
     parser.add_argument("sql_file", help="Path to the SQL stored procedure file to analyze.")
     parser.add_argument("--prompt", default=DEFAULT_PROMPT_FILE, help="Path to the prompt template file.")
@@ -270,7 +311,7 @@ def main():
     print(f"Reading prompt template: {args.prompt}")
     prompt_template = read_file(args.prompt)
 
-    llm_response = call_openai(prompt_template, sql_content)
+    llm_response = call_tachyon(prompt_template, sql_content)
 
     json_output_path = output_path.replace(".xlsx", "_llm_response.json")
     with open(json_output_path, "w", encoding="utf-8") as f:
