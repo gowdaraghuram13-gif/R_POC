@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETL Mapping Document Generator</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 700px;
+            width: 100%;
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2F5496, #1e3a6e);
+            color: white;
+            padding: 30px 40px;
+            text-align: center;
+        }
+        .header h1 { font-size: 24px; margin-bottom: 8px; font-weight: 600; }
+        .header p { font-size: 14px; opacity: 0.85; line-height: 1.5; }
+        .form-body { padding: 35px 40px; }
+        .form-group { margin-bottom: 24px; }
+        .form-group label { display: block; font-weight: 600; color: #333; margin-bottom: 8px; font-size: 14px; }
+        .form-group label .optional { font-weight: 400; color: #999; font-size: 12px; }
+        .form-group input[type="text"],
+        .form-group input[type="password"] {
+            width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0;
+            border-radius: 8px; font-size: 14px; transition: border-color 0.3s; outline: none;
+        }
+        .form-group input:focus { border-color: #2F5496; }
+        .form-group .hint { font-size: 12px; color: #888; margin-top: 4px; }
+        .upload-area {
+            border: 2px dashed #c0c0c0; border-radius: 12px; padding: 40px 20px;
+            text-align: center; cursor: pointer; transition: all 0.3s; background: #fafbfc;
+        }
+        .upload-area:hover, .upload-area.dragover { border-color: #2F5496; background: #f0f4fa; }
+        .upload-area.has-file { border-color: #27ae60; background: #f0faf4; }
+        .upload-area .icon { font-size: 48px; margin-bottom: 12px; }
+        .upload-area .text { font-size: 16px; color: #555; margin-bottom: 4px; }
+        .upload-area .subtext { font-size: 12px; color: #999; }
+        .upload-area .filename { font-size: 14px; color: #2F5496; font-weight: 600; margin-top: 8px; }
+        .file-input { display: none; }
+        .btn-generate {
+            width: 100%; padding: 14px;
+            background: linear-gradient(135deg, #2F5496, #1e3a6e);
+            color: white; border: none; border-radius: 10px;
+            font-size: 16px; font-weight: 600; cursor: pointer;
+            transition: all 0.3s; letter-spacing: 0.5px;
+        }
+        .btn-generate:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(47,84,150,0.4); }
+        .btn-generate:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        .status { margin-top: 20px; padding: 16px; border-radius: 8px; font-size: 14px; display: none; }
+        .status.loading { display: block; background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+        .status.success { display: block; background: #d4edda; color: #155724; border: 1px solid #28a745; }
+        .status.error { display: block; background: #f8d7da; color: #721c24; border: 1px solid #dc3545; }
+        .spinner {
+            display: inline-block; width: 18px; height: 18px;
+            border: 3px solid #856404; border-top-color: transparent;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+            vertical-align: middle; margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .tabs-preview { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+        .tab-badge {
+            background: rgba(255,255,255,0.2); color: white;
+            padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600;
+        }
+        .footer {
+            padding: 16px 40px; background: #f8f9fa;
+            text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ETL Mapping Document Generator</h1>
+            <p>Upload a SQL Server stored procedure and generate a comprehensive<br>mapping document powered by OpenAI GPT-4o</p>
+            <div class="tabs-preview">
+                <span class="tab-badge">Header</span>
+                <span class="tab-badge">Data Set</span>
+                <span class="tab-badge">Source Data</span>
+                <span class="tab-badge">Target Data</span>
+                <span class="tab-badge">Data Dictionary</span>
+                <span class="tab-badge">Mapping</span>
+                <span class="tab-badge">Health Checks</span>
+                <span class="tab-badge">Transformation</span>
+            </div>
+        </div>
+
+        <form id="uploadForm" class="form-body" enctype="multipart/form-data">
+            <div class="form-group">
+                <label>OpenAI API Key <span class="optional">(or set OPENAI_API_KEY env var before starting)</span></label>
+                <input type="password" id="apiKey" name="api_key" placeholder="sk-..." autocomplete="off">
+                <div class="hint">Your API key is sent directly to the server and is not stored.</div>
+            </div>
+
+            <div class="form-group">
+                <label>SQL Stored Procedure File</label>
+                <div class="upload-area" id="uploadArea" onclick="document.getElementById('sqlFile').click()">
+                    <div class="icon" id="uploadIcon">&#128196;</div>
+                    <div class="text" id="uploadText">Click to upload or drag &amp; drop</div>
+                    <div class="subtext">Accepts .sql files up to 16 MB</div>
+                    <div class="filename" id="fileName"></div>
+                </div>
+                <input type="file" id="sqlFile" name="sql_file" accept=".sql" class="file-input">
+            </div>
+
+            <button type="submit" class="btn-generate" id="btnGenerate">
+                Generate Mapping Document
+            </button>
+
+            <div class="status" id="status"></div>
+        </form>
+
+        <div class="footer">
+            Powered by OpenAI GPT-4o &bull; Generates Excel with 8 professional tabs
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const sqlFile = document.getElementById('sqlFile');
+        const uploadText = document.getElementById('uploadText');
+        const uploadIcon = document.getElementById('uploadIcon');
+        const fileName = document.getElementById('fileName');
+        const form = document.getElementById('uploadForm');
+        const btn = document.getElementById('btnGenerate');
+        const statusEl = document.getElementById('status');
+
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        uploadArea.addEventListener('dragleave', function() {
+            uploadArea.classList.remove('dragover');
+        });
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                sqlFile.files = e.dataTransfer.files;
+                updateFileDisplay(e.dataTransfer.files[0]);
+            }
+        });
+
+        sqlFile.addEventListener('change', function() {
+            if (sqlFile.files.length > 0) {
+                updateFileDisplay(sqlFile.files[0]);
+            }
+        });
+
+        function updateFileDisplay(file) {
+            uploadArea.classList.add('has-file');
+            uploadIcon.innerHTML = '&#9989;';
+            uploadText.textContent = 'File selected:';
+            fileName.textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+        }
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            if (!sqlFile.files.length) {
+                showStatus('error', 'Please select a SQL file to upload.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            showStatus('loading', '<span class="spinner"></span> Calling OpenAI API and generating mapping document... This may take 30-60 seconds.');
+
+            var formData = new FormData(form);
+
+            try {
+                var response = await fetch('/generate', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    var err = await response.json();
+                    showStatus('error', 'Error: ' + (err.error || 'Unknown error occurred.'));
+                    btn.disabled = false;
+                    btn.textContent = 'Generate Mapping Document';
+                    return;
+                }
+
+                var blob = await response.blob();
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                var disposition = response.headers.get('Content-Disposition');
+                var downloadName = 'MappingDocument.xlsx';
+                if (disposition) {
+                    var match = disposition.match(/filename=(.+)/);
+                    if (match) downloadName = match[1];
+                }
+                a.href = url;
+                a.download = downloadName;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+
+                showStatus('success', 'Mapping document generated and downloaded successfully!');
+            } catch (err) {
+                showStatus('error', 'Network error: ' + err.message);
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Generate Mapping Document';
+        });
+
+        function showStatus(type, message) {
+            statusEl.className = 'status ' + type;
+            statusEl.innerHTML = message;
+        }
+    </script>
+</body>
+</html>
