@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ETL Mapping Document Generator</title>
+    <title>ETL Business Contract Generator</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -80,8 +80,8 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>ETL Mapping Document Generator</h1>
-            <p>Upload a SQL stored procedure and an optional reference mapping document.<br>The LLM will generate a new mapping document matching the reference format.</p>
+            <h1>ETL Business Contract Generator</h1>
+            <p>Upload a SQL stored procedure and an optional reference business contract.<br>The LLM will generate a new business contract matching the reference format.</p>
             <div class="tabs-preview">
                 <span class="tab-badge">Header</span>
                 <span class="tab-badge">Data Set</span>
@@ -107,7 +107,7 @@
             </div>
 
             <div class="form-group">
-                <label>Reference Mapping Document <span style="color:#888; font-weight:normal">(optional)</span></label>
+                <label>Reference Business Contract <span style="color:#888; font-weight:normal">(optional)</span></label>
                 <div class="upload-area" id="refUploadArea" onclick="document.getElementById('refFile').click()">
                     <div class="icon" id="refUploadIcon">&#128202;</div>
                     <div class="text" id="refUploadText">Click to upload or drag &amp; drop</div>
@@ -115,11 +115,11 @@
                     <div class="filename" id="refFileName"></div>
                 </div>
                 <input type="file" id="refFile" name="ref_file" accept=".xlsx,.xls" class="file-input">
-                <div class="hint">Upload an existing mapping document as a reference. The generated document will follow the same structure, column layout, and style.</div>
+                <div class="hint">Upload an existing business contract as a reference. The generated document will follow the same structure, column layout, and style.</div>
             </div>
 
             <button type="submit" class="btn-generate" id="btnGenerate">
-                Generate Mapping Document
+                Generate Business Contract
             </button>
 
             <div class="status" id="status"></div>
@@ -188,7 +188,7 @@
 
             btn.disabled = true;
             btn.textContent = 'Generating...';
-            showStatus('loading', '<span class="spinner"></span> Calling Tachyon LLM API and generating mapping document... This may take 30-60 seconds.');
+            showStatus('loading', '<span class="spinner"></span> Calling Tachyon LLM API and generating business contract... This may take 30-60 seconds.');
 
             var formData = new FormData(form);
 
@@ -202,7 +202,7 @@
                     var err = await response.json();
                     showStatus('error', 'Error: ' + (err.error || 'Unknown error occurred.'));
                     btn.disabled = false;
-                    btn.textContent = 'Generate Mapping Document';
+                    btn.textContent = 'Generate Business Contract';
                     return;
                 }
 
@@ -222,13 +222,13 @@
                 a.remove();
                 window.URL.revokeObjectURL(url);
 
-                showStatus('success', 'Mapping document generated and downloaded successfully!');
+                showStatus('success', 'Business contract generated and downloaded successfully!');
             } catch (err) {
                 showStatus('error', 'Network error: ' + err.message);
             }
 
             btn.disabled = false;
-            btn.textContent = 'Generate Mapping Document';
+            btn.textContent = 'Generate Business Contract';
         });
 
         function showStatus(type, message) {

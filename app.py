@@ -1,6 +1,6 @@
 """
-Flask web application for generating ETL mapping documents.
-Upload a SQL stored procedure file and get an Excel mapping document back.
+Flask web application for generating ETL business contracts.
+Upload a SQL stored procedure file and get an Excel business contract back.
 
 Usage:
     1. Create a .env file with Tachyon credentials (see .env.example)
@@ -121,5 +121,5 @@ if __name__ == "__main__":
         print("Create a .env file with the required values (see .env.example).")
     else:
         print("Tachyon credentials loaded successfully.")
-    print("Starting Mapping Document Generator on http://localhost:5000")
+    print("Starting Business Contract Generator on http://localhost:5000")
     app.run(host="0.0.0.0", port=5000, debug=True)
