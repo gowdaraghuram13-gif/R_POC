@@ -3,7 +3,7 @@ Flask web application for generating ETL mapping documents.
 Upload a SQL stored procedure file and get an Excel mapping document back.
 
 Usage:
-    1. Create a .env file with: OPENAI_API_KEY=sk-...
+    1. Create a .env file with Tachyon credentials (see .env.example)
     2. python app.py
     3. Open http://localhost:5000 in your browser.
 """
@@ -15,7 +15,7 @@ import tempfile
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, send_file, jsonify
 
-from generate_mapping_doc import call_openai, build_excel, read_file, DEFAULT_PROMPT_FILE
+from generate_mapping_doc import call_tachyon, build_excel, read_file, read_reference_excel, DEFAULT_PROMPT_FILE
 
 # Load .env file from the project root
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
@@ -31,9 +31,16 @@ def index():
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    # Check API key (loaded from .env file)
-    if not os.environ.get("OPENAI_API_KEY"):
-        return jsonify({"error": "OpenAI API key is not configured. Please add OPENAI_API_KEY=sk-... to your .env file and restart the server."}), 400
+    # Check Tachyon credentials (loaded from .env file)
+    missing = []
+    if not os.environ.get("TACHYON_SESSION"):
+        missing.append("TACHYON_SESSION")
+    if not os.environ.get("TACHYON_USER_ID"):
+        missing.append("TACHYON_USER_ID")
+    if not os.environ.get("TACHYON_PRESET_ID"):
+        missing.append("TACHYON_PRESET_ID")
+    if missing:
+        return jsonify({"error": f"Tachyon credentials not configured. Missing: {', '.join(missing)}. Please add them to your .env file and restart the server."}), 400
 
     # Check file upload
     if "sql_file" not in request.files:
@@ -49,6 +56,24 @@ def generate():
     # Read SQL content
     sql_content = sql_file.read().decode("utf-8")
 
+    # Read optional reference mapping document
+    reference_content = None
+    if "ref_file" in request.files:
+        ref_file = request.files["ref_file"]
+        if ref_file.filename and ref_file.filename != "":
+            if not ref_file.filename.lower().endswith((".xlsx", ".xls")):
+                return jsonify({"error": "Reference file must be an Excel file (.xlsx or .xls)."}), 400
+            # Save to a temp file so openpyxl can read it
+            with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as ref_tmp:
+                ref_tmp_path = ref_tmp.name
+                ref_file.save(ref_tmp_path)
+            try:
+                reference_content = read_reference_excel(ref_tmp_path)
+            except Exception as e:
+                return jsonify({"error": f"Failed to read reference document: {e}"}), 400
+            finally:
+                os.unlink(ref_tmp_path)
+
     # Read prompt template
     prompt_path = request.form.get("prompt_path", "").strip()
     if not prompt_path:
@@ -60,8 +85,8 @@ def generate():
     prompt_template = read_file(prompt_path)
 
     try:
-        # Call OpenAI
-        llm_response = call_openai(prompt_template, sql_content)
+        # Call Tachyon LLM
+        llm_response = call_tachyon(prompt_template, sql_content, reference_content=reference_content)
 
         # Build Excel in a temp file
         proc_name = os.path.splitext(sql_file.filename)[0]
@@ -89,9 +114,12 @@ def generate():
 
 
 if __name__ == "__main__":
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("WARNING: OPENAI_API_KEY not found. Create a .env file with: OPENAI_API_KEY=sk-...")
+    required = ["TACHYON_SESSION", "TACHYON_USER_ID", "TACHYON_PRESET_ID"]
+    missing = [k for k in required if not os.environ.get(k)]
+    if missing:
+        print(f"WARNING: Missing Tachyon credentials: {', '.join(missing)}")
+        print("Create a .env file with the required values (see .env.example).")
     else:
-        print("OpenAI API key loaded successfully.")
+        print("Tachyon credentials loaded successfully.")
     print("Starting Mapping Document Generator on http://localhost:5000")
     app.run(host="0.0.0.0", port=5000, debug=True)

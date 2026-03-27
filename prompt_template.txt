@@ -37,3 +37,9 @@ Here is the stored procedure to analyze:
 ---BEGIN SQL---
 {sql_content}
 ---END SQL---
+
+---BEGIN REFERENCE MAPPING DOCUMENT---
+The following is a reference mapping document. If a real reference document is provided below, you MUST follow its exact structure, tab layout, column names, and content style. Your output JSON should produce a mapping document that looks like the reference but with data extracted from the SQL stored procedure above.
+
+{reference_content}
+---END REFERENCE MAPPING DOCUMENT---
